@@ -4,8 +4,8 @@ from evidently import Report
 from evidently.presets import DataDriftPreset, DataSummaryPreset
 import os
 import pandas as pd
-def check_data_drift(reference_path="original_data/transactions_2022.csv",
-                     current_path="original_data/transactions_2023.csv",
+def check_data_drift(reference_path="./original_data/transactions_2022.csv",
+                     current_path="./original_data/transactions_2023.csv",
                      output_dir="artifacts"):
     """
     Compares a reference (v0) and current (v1) dataset to generate a
