@@ -45,7 +45,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Fail-fast if secret is missing/empty
           if [ -z "${GCP_B64}" ]; then
             echo "❌ Secret GCP_CREDENTIALS_B64 is empty/not set" | tee -a report.md
             exit 1
@@ -56,14 +55,9 @@ jobs:
           fi
 
           echo "$GCP_B64" | base64 -d > gcp-key.json
-
-          # Validate decode produced a non-empty file
           test -s gcp-key.json || (echo "❌ gcp-key.json is empty after base64 decode" | tee -a report.md && exit 1)
-
-          # Validate it's valid JSON
           python3 -m json.tool gcp-key.json > /dev/null
 
-          # Make creds available to both gcloud + DVC + python libs
           echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp-key.json" >> $GITHUB_ENV
 
           gcloud auth activate-service-account --key-file=gcp-key.json
@@ -71,26 +65,17 @@ jobs:
 
           echo "✅ GCP auth ok (project: $GCP_PROJECT_ID)" >> report.md
 
-      # ✅ Cache DVC cache to avoid .dir/md5 cache FileNotFoundError in CI
-      - name: Cache DVC cache
-        uses: actions/cache@v4
-        with:
-          path: .dvc/cache
-          key: dvc-cache-${{ runner.os }}-${{ hashFiles('**/*.dvc', 'dvc.yaml', 'dvc.lock', '.dvc/config') }}
-          restore-keys: |
-            dvc-cache-${{ runner.os }}-
-
-      # ✅ Clean DVC tmp (safe). Keep cache for speed and stability.
-      - name: Clean DVC tmp
+      # ✅ CI-stable: remove any partial cache state (fixes .dir/md5 FileNotFoundError)
+      - name: Clean DVC state
         run: |
-          rm -rf .dvc/tmp
+          rm -rf .dvc/cache .dvc/tmp
 
-      # ✅ DVC pull (no remote modify needed)
+      # ✅ DVC pull (force rebuild)
       - name: DVC pull
         run: |
           set -euo pipefail
           source .venv/bin/activate
-          dvc pull -v
+          dvc pull -v --force
           echo "✅ DVC pull completed" >> report.md
 
       # --- PRE-TRAINING VALIDATION GATES ---
@@ -102,7 +87,6 @@ jobs:
           echo "" >> report.md
           echo "## 🛡️ Data Poisoning Check" >> report.md
 
-          # Your script should ideally print: SUSPICIOUS_COUNT=<number>
           python src/check_poisoning.py --data-path data/transactions.csv | tee poison_out.txt
           cat poison_out.txt >> report.md
 
@@ -212,7 +196,6 @@ jobs:
         env:
           REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Render SHAP plot in the PR comment if it exists
           if [ -f artifacts/shap_summary.png ]; then
             echo "" >> report.md
             echo "### SHAP Feature Importance" >> report.md
