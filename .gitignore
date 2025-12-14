@@ -3,4 +3,7 @@
 transactions.csv
 .venv/
 /artifacts
+key.b64
+github-actions-sa.json
+
 
